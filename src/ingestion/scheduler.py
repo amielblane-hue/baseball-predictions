@@ -8,6 +8,7 @@ Run directly to start the blocking scheduler:
 import logging
 
 from datetime import date, datetime
+from requests.exceptions import HTTPError
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -34,9 +35,12 @@ def morning_data_pull() -> None:
 
     logger.info("Running morning data pull...")
     schedule = fetch_todays_probable_pitchers()
-    odds_raw = fetch_current_odds()
-    consensus = get_consensus_line(odds_raw)
-    _save_consensus_snapshot(consensus, date.today(), label="morning")
+    try:
+        odds_raw = fetch_current_odds()
+        consensus = get_consensus_line(odds_raw)
+        _save_consensus_snapshot(consensus, date.today(), label="morning")
+    except (HTTPError, ValueError) as exc:
+        logger.warning("Odds fetch skipped – %s", exc)
     logger.info("Found %d games today", len(schedule))
 
 
@@ -48,7 +52,10 @@ def midday_odds_pull() -> None:
         return
 
     logger.info("Running midday odds pull...")
-    fetch_current_odds()
+    try:
+        fetch_current_odds()
+    except (HTTPError, ValueError) as exc:
+        logger.warning("Midday odds fetch skipped – %s", exc)
 
 
 @scheduler.scheduled_job(CronTrigger(hour=16, minute=0, timezone="America/New_York"))
